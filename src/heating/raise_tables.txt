@@ -1,0 +1,3 @@
+# RAiSE computed heating tables
+# Environment File name
+‘A’      C08.00_mzero.cie
