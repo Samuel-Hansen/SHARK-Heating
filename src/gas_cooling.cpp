@@ -92,6 +92,7 @@ GasCoolingParameters::GasCoolingParameters(const Options &options)
 {
 	options.load("gas_cooling.model", model, true);
 	options.load("gas_cooling.lambdamodel", lambdamodel, true);
+	options.load("gas_cooling.heatingmodel", heatingmodel, true);
 	options.load("gas_cooling.pre_enrich_z", pre_enrich_z);
 	options.load("gas_cooling.tau_cooling", tau_cooling);
 	options.load("gas_cooling.limit_fbar", limit_fbar);
@@ -214,6 +215,21 @@ Options::get<GasCoolingParameters::CoolingModel>(const std::string &name, const 
 	throw invalid_option(os.str());
 }
 
+template <>
+GasCoolingParameters::HeatingModel
+Options::get<GasCoolingParameters::HeatingModel>(const std::string &name, const std::string &value) const {
+	auto lvalue = lower(value);
+	if (lvalue == "raise") {
+		return GasCoolingParameters::RAiSE;
+	}
+	else if (lvalue == "lagos23") {
+		return GasCoolingParameters::LAGOS23;
+	}
+	std::ostringstream os;
+	os << name << " option value invalid: " << value << ". Supported values are raise and lagos23";
+	throw invalid_option(os.str());
+}
+
 GasCooling::GasCooling(GasCoolingParameters parameters,
 		StarFormationParameters params_sf,
 		ExecutionParameters exec_params,
@@ -255,10 +271,7 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 	auto halo = subhalo.host_halo;
 
 	subhalo.cooling_rate = 0;
-    for (int i = 0; i < 100; i++) {
-      cout << i << "\n";
-      cout << agnfeedback->parameters.model == AGNFeedbackParameters;
-    }
+
 	if(subhalo.subhalo_type == Subhalo::SATELLITE){
 		//Compute how much hot gas there is in this satellite_subhalo based on the environmental processes applied to it.
 		environment->process_satellite_subhalo_environment(subhalo, subhalo.host_halo->central_subhalo, z);
@@ -512,10 +525,6 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 	}
 
 	if(agnfeedback->parameters.model == AGNFeedbackParameters::BOWER06){
-        for (int i = 0; i < 100; i++) {
-          cout << i << "\n";
-          cout << agnfeedback->parameters.model;
-        }
 		if(agnfeedback->parameters.alpha_cool > 0){
 			double tdyn_rcool = r_cool/vvir * constants::MPCKM2GYR; //Dynamical timescale at cooling radius.
 			/**
@@ -574,14 +583,11 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 				}
 			}	
 
-			for (int i = 0; i < 100; i++) {
-			  cout << i << "\n";
-			  cout << agnfeedback->parameters.model == AGNFeedbackParameters;
-			}
+
 
 			// radio mode feedback only applies in situations where there is a hot halo
 			if(halo->hydrostatic_eq){
-				double Qnet;
+				double Qnet = 0;
 				if (parameters.heatingmodel == GasCoolingParameters::RAiSE){
 					auto environment_tables_dir = get_static_data_filepath("heating");
 					auto heating_tables_dir = get_static_data_filepath("heating");
@@ -614,11 +620,11 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 								heating_data.active_age_values,
 								heating_data.jet_power_values,
 								heating_data.heating_points);
-						double Qnet = heating_interpolator.get(active_age, jet_power) * deltat * 3.156e16 / 1e40  * 1e-7; //in units of 1e40erg/s.
+						Qnet = heating_interpolator.get(active_age, jet_power) * deltat * 3.156e16 / 1e40  * 1e-7; //in units of 1e40erg/s.
 					}
 				}
 				else{
-				double Qnet = agnfeedback->parameters.kappa_jet * agnfeedback->agn_mechanical_luminosity(central_galaxy->smbh); //in units of 1e40erg/s.
+				Qnet = agnfeedback->parameters.kappa_jet * agnfeedback->agn_mechanical_luminosity(central_galaxy->smbh); //in units of 1e40erg/s.
 				}
 				// If this is a central subhalo, then add up any excess jet feedback from satellite galaxies and then make excess equal 0.
 				if(subhalo.subhalo_type == Subhalo::CENTRAL) {
@@ -630,6 +636,11 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 
  				//heating rate will be determined by the offset in luminosity that the AGN provides
 				mheatrate = central_galaxy->mheat_ratio * coolingrate;
+                
+                
+                //track heating rate
+                subhalo.heating_rate = Qnet;   // [1e40 erg/s]
+
 			}
 		}
 		else if(agnfeedback->parameters.model == AGNFeedbackParameters::CROTON16){
@@ -764,7 +775,6 @@ double GasCooling::cooling_rate(Subhalo &subhalo, Galaxy &galaxy, double z, doub
 
 	// Save net cooling rate.
 	subhalo.cooling_rate = coolingrate;
-
 	if(coolingrate > 0){
 		// define cooled gas angular momentum.
 		darkmatterhalos->cooling_gas_sAM(subhalo, z);

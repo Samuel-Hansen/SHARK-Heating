@@ -274,6 +274,8 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 	vector<float> mlost_metals;
 
 	vector<float> cooling_rate;
+    vector<float> heating_rate;
+    
 	vector<int> on_hydrostatic_eq;
 
 	vector<float> mvir_hosthalo;
@@ -476,6 +478,7 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 				double ms_mean_stellarhalo = 0;
 
 				double rcool = 0;
+                double rheat = 0;
 				double mhalo_stripped = 0;
 				double mhalo_stripped_metals = 0;
 				double r_rps_subhalo = 0;
@@ -484,6 +487,7 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 				// Define cooling rate, halo gas and related properties only if subhalo is not a type 2.
 				if(galaxy.galaxy_type != Galaxy::TYPE2){
 					rcool		= subhalo->cooling_rate;
+                    rheat		= subhalo->heating_rate;
 					mhot_gal	= hot_subhalo.mass + cold_subhalo.mass;
 					mzhot_gal	= hot_subhalo.mass_metals + cold_subhalo.mass_metals;
 					mreheat		= reheated_subhalo.mass;
@@ -512,6 +516,7 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 				}
 
 				cooling_rate.push_back(rcool);
+                heating_rate.push_back(rheat);
 				mhot_stripped.push_back(mhalo_stripped);
 				mhot_stripped_metals.push_back(mhalo_stripped_metals);
 				r_stripped.push_back(r_rps_subhalo);
@@ -690,6 +695,7 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 	REPORT(stellar_halo_metals);
 	REPORT(mean_stellar_mass_galaxies_ihsc);
 	REPORT(cooling_rate);
+    REPORT(heating_rate);
 	REPORT(on_hydrostatic_eq);
 	REPORT(mhot_stripped);
 	REPORT(mhot_stripped_metals);
@@ -956,6 +962,9 @@ void HDF5GalaxyWriter::write_galaxies(hdf5::Writer &file, int snapshot, const st
 	comment = "cooling rate of the hot halo component [Msun/Gyr/h].";
 	file.write_dataset("galaxies/cooling_rate", cooling_rate, comment);
 
+    comment = "AGN injected heating rate [1e40 erg/s].";
+    file.write_dataset("galaxies/heating_rate", heating_rate, comment);    
+    
 	comment = "is halo on quasi hydrostatic equilibrium (=1 for true, =0 for false).";
 	file.write_dataset("galaxies/on_hydrostatic_eq", on_hydrostatic_eq, comment);
 
